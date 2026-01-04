@@ -7,13 +7,18 @@ import logging
 import mimetypes
 import os
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
+from github import Auth, Github as GithubClient, GithubException
 from requests import HTTPError
 
 from semantic_release.helpers import logged_function
 from semantic_release.hvcs._base import HvcsBase
 from semantic_release.hvcs.token_auth import TokenAuth
 from semantic_release.hvcs.util import build_requests_session, suppress_not_found
+
+if TYPE_CHECKING:
+    from github.Repository import Repository
 
 log = logging.getLogger(__name__)
 
@@ -65,8 +70,27 @@ class Github(HvcsBase):
         self.upload_url = f"https://{self.DEFAULT_UPLOAD_DOMAIN}"
 
         self.token = token
-        auth = None if not self.token else TokenAuth(self.token)
-        self.session = build_requests_session(auth=auth)
+
+        # Initialize PyGithub client
+        auth = Auth.Token(self.token) if self.token else None
+
+        # For GitHub Enterprise, use custom base_url
+        base_url = (
+            self.api_url if self.hvcs_api_domain != self.DEFAULT_API_DOMAIN else None
+        )
+
+        self.client = (
+            GithubClient(auth=auth, base_url=base_url)
+            if base_url
+            else GithubClient(auth=auth)
+        )
+
+        # Keep session for backward compatibility with methods not yet migrated
+        auth_requests = None if not self.token else TokenAuth(self.token)
+        self.session = build_requests_session(auth=auth_requests)
+
+        # Lazy-load repository object (will be initialized on first access)
+        self._repo = None
 
     @lru_cache(maxsize=1)
     def _get_repository_owner_and_name(self) -> tuple[str, str]:
@@ -76,6 +100,24 @@ class Github(HvcsBase):
             owner, name = os.environ["GITHUB_REPOSITORY"].rsplit("/", 1)
             return owner, name
         return super()._get_repository_owner_and_name()
+
+    @property
+    def repo(self) -> Repository:
+        """
+        Lazily retrieve the GitHub repository object using PyGithub.
+
+        This property caches the repository to avoid repeated API calls.
+        """
+        if self._repo is None:
+            owner, name = self._get_repository_owner_and_name()
+            repo_full_name = f"{owner}/{name}"
+            log.debug("Retrieving repository: %s", repo_full_name)
+            try:
+                self._repo = self.client.get_repo(repo_full_name)
+            except GithubException as e:
+                log.exception("Failed to retrieve repository %s: %s", repo_full_name, e)
+                raise
+        return self._repo
 
     def compare_url(
         self,
