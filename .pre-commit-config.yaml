@@ -2,7 +2,7 @@
 default_language_version:
   python: python3
 
-exclude: "^CHANGELOG.md$"
+exclude: "^CHANGELOG\\.(md|rst)$"
 
 repos:
   # Meta hooks
@@ -49,15 +49,15 @@ repos:
       - id: ruff-format
         name: ruff (format)
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: "v1.16.1"
+  - repo: local
     hooks:
       - id: mypy
-        additional_dependencies:
-          - "pydantic>=2,<3"
-          - "types-requests"
+        name: mypy
+        entry: mypy src
+        language: system
+        types: [python]
         log_file: "mypy.log"
-        files: "^(src|tests)/.*"
+        files: "^src/"
         pass_filenames: false
 
   - repo: https://github.com/pre-commit/pygrep-hooks
@@ -80,8 +80,9 @@ repos:
           - --min-confidence
           - "100"
           - --sort-by-size
-          - "semantic_release"
+          - "src/semantic_release"
           - "tests"
+          - "vulture_whitelist.py"
 
   - repo: https://github.com/pycqa/bandit
     rev: 1.7.8
