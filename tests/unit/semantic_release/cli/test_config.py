@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import sys
@@ -10,6 +11,7 @@ from unittest import mock
 
 import pytest
 import tomlkit
+from git import InvalidGitRepositoryError, Repo
 from pydantic import RootModel, ValidationError
 from urllib3.util.url import parse_url
 
@@ -463,3 +465,76 @@ def test_git_remote_url_w_insteadof_alias(
 
     # Evaluate: the remote URL should be the full URL
     assert expected_url.url == actual_url
+
+
+# ---- Tests for verify_git_repo_dir (Issue #1418) ----
+
+
+def test_verify_git_repo_dir_current_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    """Given a git repo and repo_dir='.', when RawConfig validates, then no warning is emitted."""
+    Repo.init(str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+
+    with caplog.at_level(logging.WARNING):
+        config = RawConfig.model_validate({"repo_dir": "."})
+
+    assert config.repo_dir == tmp_path.resolve()
+    assert "does not match the detected git repository root" not in caplog.text
+
+
+def test_verify_git_repo_dir_relative_parent_no_false_warning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    """Given a monorepo where .git/ is in the parent and repo_dir='..', when RawConfig validates, then no false warning is emitted."""
+    Repo.init(str(tmp_path))
+    subdir = tmp_path / "package-a"
+    subdir.mkdir()
+    monkeypatch.chdir(subdir)
+
+    with caplog.at_level(logging.WARNING):
+        config = RawConfig.model_validate({"repo_dir": ".."})
+
+    assert config.repo_dir == tmp_path.resolve()
+    assert "does not match the detected git repository root" not in caplog.text
+
+
+def test_verify_git_repo_dir_parent_search_emits_warning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    """Given a git repo in a parent dir and repo_dir='.', when RawConfig validates, then a warning is emitted because the configured dir differs from the repo root."""
+    Repo.init(str(tmp_path))
+    subdir = tmp_path / "package-a"
+    subdir.mkdir()
+    monkeypatch.chdir(subdir)
+
+    with caplog.at_level(logging.WARNING):
+        config = RawConfig.model_validate({"repo_dir": "."})
+
+    # The validator should still resolve to the repo root
+    assert config.repo_dir == tmp_path.resolve()
+    # But a warning should be emitted since repo_dir="." doesn't match the repo root
+    assert "does not match the detected git repository root" in caplog.text
+
+
+def test_verify_git_repo_dir_invalid_repo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Given a directory with no .git/, when RawConfig validates, then InvalidGitRepositoryError is raised."""
+    no_repo_dir = tmp_path / "no-repo"
+    no_repo_dir.mkdir()
+    monkeypatch.chdir(no_repo_dir)
+
+    with pytest.raises(
+        (ValidationError, InvalidGitRepositoryError),
+        match="No valid git repository found",
+    ):
+        RawConfig.model_validate({"repo_dir": "."})

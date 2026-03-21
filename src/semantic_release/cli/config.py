@@ -388,15 +388,18 @@ class RawConfig(BaseModel):
                 found_path = (
                     Path(git_repo.working_tree_dir or git_repo.working_dir)
                     .expanduser()
-                    .absolute()
+                    .resolve()
                 )
 
         except InvalidGitRepositoryError as err:
             raise InvalidGitRepositoryError("No valid git repository found!") from err
 
-        if dir_path.absolute() != found_path:
-            logging.warning(
-                "Found .git/ in higher parent directory rather than provided in configuration."
+        if dir_path.resolve() != found_path:
+            logger.warning(
+                "The repo_dir setting does not match the detected git repository"
+                " root. Expected '%s' but found .git/ at '%s'.",
+                dir_path.resolve(),
+                found_path,
             )
 
         return found_path.resolve()
