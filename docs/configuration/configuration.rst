@@ -665,7 +665,7 @@ The patterns in this list are treated as regular expressions.
 ``mode``
 ********
 
-*Introduced in v9.10.0. Default changed to `update` in v10.0.0.*
+*Introduced in v9.10.0. Default changed to* ``update`` *in v10.0.0.*
 
 **Type:** ``Literal["init", "update"]``
 
@@ -680,7 +680,7 @@ When the mode is set to ``update``, the changelog file will look for the ``inser
 in the changelog file (defined by :ref:`config-changelog-changelog_file`) and insert the new
 version information at that location.
 
-If you are using a custom template directory, the `context.changelog_mode` value will exist in the
+If you are using a custom template directory, the ``context.changelog_mode`` value will exist in the
 changelog context but it is up to your implementation to determine if and/or how to use it.
 
 **Default:** ``update``

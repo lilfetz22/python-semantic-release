@@ -435,7 +435,7 @@ The private key used to sign a commit and tag.
 ``strict``
 """"""""""
 
-If set to true, the github action will pass the `--strict` parameter to
+If set to true, the github action will pass the ``--strict`` parameter to
 ``semantic-release``.
 
 .. seealso::
