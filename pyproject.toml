@@ -213,6 +213,10 @@ ignore_missing_imports = true
 module = "dotty_dict"
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "pydantic._internal.*"
+follow_imports = "skip"
+
 [tool.ruff]
 line-length = 88
 target-version = "py38"
